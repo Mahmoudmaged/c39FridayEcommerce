@@ -19,10 +19,11 @@ const initApp = (app, express) => {
 
     app.use(cors())
 
-    // app.use((req, res, next) => {
-    // console.log(req.header('origin'));
-    //     next()
-    // })
+    app.use((req, res, next) => {
+        console.log(req.originalUrl);
+        // console.log(req.header('origin'));
+        next()
+    })
 
     // var whitelist = ['http://example1.com', 'http://127.0.0.1:5500']
     // var corsOptions = {
@@ -56,10 +57,16 @@ const initApp = (app, express) => {
         app.use(morgan('combined'))
     }
     //convert Buffer Data
-    app.use(express.json({}))
+    app.use((req, res, next) => {
+        if (req.originalUrl == '/order/webhook') {
+            next()
+        } else {
+            express.json({})(req, res, next)
+        }
+    })
     //Setup API Routing 
     app.get('/', (req, res, next) => {
-      return  res.status(200).send("Welcome in C39 E-commerce App.")
+        return res.status(200).send("Welcome in C39 E-commerce App.")
     })
     app.use(`/auth`, authRouter)
     app.use(`/user`, userRouter)

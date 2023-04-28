@@ -12,6 +12,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
 import { customAlphabet } from 'nanoid';
+import payment from '../../../utils/payment.js';
+import Stripe from 'stripe';
 //set directory dirname 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -117,6 +119,37 @@ export const createOrder = async (req, res, next) => {
     // })
     // fs.unlinkSync(path.join(__dirname, `../pdf/invoice.pdf`))
 
+    // payment
+
+    if (order.paymentType == 'card') {
+
+        const session = await payment({
+            customer_email: req.user.email,
+            metadata: {
+                orderId: order._id.toString()
+            },
+            cancel_url: `${req.protocol}://${req.headers.host}/order/cancel?orderId=${order._id.toString()}`,
+
+            line_items: order.products.map(product => {
+                return {
+
+                    price_data: {
+                        currency: 'usd',
+                        product_data: {
+                            name: product.name
+                        },
+                        unit_amount: product.unitPrice * 100
+                    },
+                    quantity: product.quantity
+                }
+            })
+
+        })
+
+        return res.status(201).json({ message: "Done", order, session })
+
+    }
+
     return res.status(201).json({ message: "Done", order })
 
 }
@@ -167,10 +200,9 @@ export const updateOrderStatusByAdmin = asyncHandler(async (req, res, next) => {
     return res.status(200).json({ message: "Done" })
 })
 
+export const webhook = asyncHandler(async (req, res, next) => {
+    const stripe = new Stripe(process.env.STRIPE_SECRET)
 
-export const webhook = asyncHandler(async (req, res) => {
-
-    const stripe = new Stripe(process.env.STRIPE_KEY)
     const sig = req.headers['stripe-signature'];
 
     let event;
@@ -185,9 +217,10 @@ export const webhook = asyncHandler(async (req, res) => {
     // Handle the event
     const { orderId } = event.data.object.metadata
     if (event.type != 'checkout.session.completed') {
-        await orderModel.updateOne({ _id: orderId }, { status: "rejected" });
-        return res.status(400).json({ message: "Rejected order" })
+        await orderModel.updateOne({ _id: orderId }, { status: "rejected" })
+        return res.status(400).json({message:"Rejected order" })
     }
-    await orderModel.updateOne({ _id: orderId }, { status: "placed" });
-    return res.status(200).json({ message: "Done" })
+    await orderModel.updateOne({ _id: orderId }, { status: "placed" })
+    return res.status(200).json({message:"Done" })
+   
 })
